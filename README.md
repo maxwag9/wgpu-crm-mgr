@@ -18,7 +18,6 @@ You describe what you want to bind, and the manager figures out the rest.
 ALSO includes an automatic procedural texture manager used by the RenderManager, 
 which makes textures using compute shaders automatically and binds them automatically!
 
----
 # Examples
 ### Compute
 
@@ -33,7 +32,9 @@ which makes textures using compute shaders automatically and binds them automati
         &[&camera_buffer]            // Optional Buffers
     );
 ```
+
 ### Render
+
 ```rust
     let mut render_manager = RenderManager::new(&device, &queue, texture_shaders_path);
     render_manager.render(
@@ -44,7 +45,6 @@ which makes textures using compute shaders automatically and binds them automati
         pass                         // Your own pass!
     );
 ```
----
 
 ## What this crate is
 
@@ -52,8 +52,6 @@ which makes textures using compute shaders automatically and binds them automati
 - Designed for **engines and tools**, not examples
 - Focused on **performance, correctness, and zero magic state**
 - Explicit data flow, no global settings, no hidden stuff
-
----
 
 ## Features
 
@@ -65,7 +63,6 @@ which makes textures using compute shaders automatically and binds them automati
 - Procedural texture generation using compute shaders
 - No engine-specific globals or renderer state
 
----
 
 ## Non-goals
 
@@ -77,7 +74,6 @@ This crate intentionally does **not**:
 
 You still control your render passes, encoders, and frame timing!
 
----
 
 ## Philosophy
 
@@ -91,15 +87,12 @@ If something can be:
 
 …it probably is…
 
----
 
 ## Status
 
 This is an early release (`0.1.x`), so APIs will evolve as I develop my Game, [Rusty Skylines](https://github.com/maxwag9/rusty_skylines).
 
-
 - Feedback welcome
 
----
 
 MIT License, because this crate WILL HELP YOU!

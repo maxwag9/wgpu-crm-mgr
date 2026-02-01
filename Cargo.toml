@@ -1,10 +1,10 @@
 [package]
 name = "wgpu_crm_mgr"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 
 authors = ["Maxim Wagner"]
-license = "MIT OR Apache-2.0"
+license = "MIT"
 description = "A lightweight cached wrapper for wgpu render and compute pipelines and procedural textures"
 repository = "https://github.com/maxwag9/wgpu-crm-mgr"
 homepage = "https://github.com/maxwag9/wgpu-crm-mgr"
@@ -15,4 +15,5 @@ categories = ["graphics", "rendering", "game-development"]
 
 [dependencies]
 wgpu = "28.0.0"
-bytemuck = "1.25.0"
+bytemuck = "^1.12.0"
+

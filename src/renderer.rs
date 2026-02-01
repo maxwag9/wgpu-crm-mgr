@@ -166,11 +166,11 @@ impl RenderManager {
         &'a mut self,
         shader_path: &Path,
         bind_group_layouts: &[&BindGroupLayout],
-        bind_groups: &[&'a BindGroup],
-        spec: &PipelineOptions,
+        bind_groups: &[&BindGroup],
+        options: &PipelineOptions,
         pass: &mut RenderPass<'a>,
     ) {
-        let pipeline = self.pipeline_cache.get_or_create(shader_path, bind_group_layouts, spec);
+        let pipeline = self.pipeline_cache.get_or_create(shader_path, bind_group_layouts, options);
         pass.set_pipeline(pipeline);
 
         for (i, bg) in bind_groups.iter().enumerate() {

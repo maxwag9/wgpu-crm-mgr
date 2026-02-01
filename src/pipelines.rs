@@ -14,7 +14,7 @@ pub struct PipelineOptions {
     pub vertex_layouts: Vec<VertexBufferLayout<'static>>,
     pub cull_mode: Option<Face>,
     pub targets: Vec<Option<ColorTargetState>>,
-    pub depth_only: bool,
+    pub vertex_only: bool,
 }
 
 impl Default for PipelineOptions {
@@ -26,7 +26,7 @@ impl Default for PipelineOptions {
             vertex_layouts: vec![],
             cull_mode: None,
             targets: vec![],
-            depth_only: false,
+            vertex_only: false,
         }
     }
 }
@@ -63,7 +63,7 @@ impl PipelineOptions {
     }
 
     pub fn depth_only(mut self) -> Self {
-        self.depth_only = true;
+        self.vertex_only = true;
         self
     }
 }
@@ -182,7 +182,7 @@ impl PipelineCache {
             msaa_samples: options.msaa_samples,
             depth_stencil: options.depth_stencil.as_ref().map(|d| d.into()),
             cull_mode: options.cull_mode,
-            depth_only: options.depth_only,
+            depth_only: options.vertex_only,
         };
 
         if !self.pipelines.contains_key(&key) {
@@ -236,7 +236,7 @@ impl PipelineCache {
             immediate_size: 0,
         });
 
-        let fragment = if options.depth_only {
+        let fragment = if options.vertex_only {
             None
         } else {
             Some(FragmentState {
@@ -248,7 +248,7 @@ impl PipelineCache {
         };
 
         self.device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some(&format!("{} pipeline", key.shader_path.display())),
+            label: Some(&format!("{} Pipeline", key.shader_path.display())),
             layout: Some(&pipeline_layout),
             vertex: VertexState {
                 module: shader,

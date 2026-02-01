@@ -94,7 +94,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 }
 "#;
 
-const FULLSCREEN_GRAYSCALE_SHADER: &str = r#"
+const FULLSCREEN_RED_TO_GRAYSCALE_SHADER: &str = r#"
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
@@ -145,7 +145,7 @@ pub struct DepthDebugParams {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DebugVisualization {
     Color,
-    Grayscale,
+    RedToGrayscale,
     Depth,
 }
 
@@ -161,7 +161,7 @@ struct DepthParams {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum PipelineKind {
     Color,
-    Grayscale,
+    RedToGrayscale,
     Depth,
 }
 
@@ -184,7 +184,7 @@ pub struct FullscreenRenderer {
     queue: Queue,
 
     color_shader: ShaderModule,
-    grayscale_shader: ShaderModule,
+    red_to_grayscale_shader: ShaderModule,
     depth_shader: ShaderModule,
 
     color_bgl: BindGroupLayout,
@@ -210,7 +210,7 @@ impl FullscreenRenderer {
 
         let grayscale_shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("fullscreen grayscale shader"),
-            source: ShaderSource::Wgsl(FULLSCREEN_GRAYSCALE_SHADER.into()),
+            source: ShaderSource::Wgsl(FULLSCREEN_RED_TO_GRAYSCALE_SHADER.into()),
         });
 
         let depth_shader = device.create_shader_module(ShaderModuleDescriptor {
@@ -294,7 +294,7 @@ impl FullscreenRenderer {
             device,
             queue,
             color_shader,
-            grayscale_shader,
+            red_to_grayscale_shader: grayscale_shader,
             depth_shader,
             color_bgl,
             depth_bgl,
@@ -319,7 +319,7 @@ impl FullscreenRenderer {
     ) {
         let kind = match visualization {
             DebugVisualization::Color => PipelineKind::Color,
-            DebugVisualization::Grayscale => PipelineKind::Grayscale,
+            DebugVisualization::RedToGrayscale => PipelineKind::RedToGrayscale,
             DebugVisualization::Depth => {PipelineKind::Depth}
         };
 
@@ -390,7 +390,7 @@ impl FullscreenRenderer {
     ) -> RenderPipeline {
         let (shader, bgl) = match kind {
             PipelineKind::Color => (&self.color_shader, &self.color_bgl),
-            PipelineKind::Grayscale => (&self.grayscale_shader, &self.color_bgl),
+            PipelineKind::RedToGrayscale => (&self.red_to_grayscale_shader, &self.color_bgl),
             PipelineKind::Depth => (&self.depth_shader, &self.depth_bgl),
         };
 
@@ -448,7 +448,7 @@ impl FullscreenRenderer {
 
         if !self.bind_groups.contains_key(&key) {
             let (layout, sampler) = match kind {
-                PipelineKind::Color | PipelineKind::Grayscale => (&self.color_bgl, &self.linear_sampler),
+                PipelineKind::Color | PipelineKind::RedToGrayscale => (&self.color_bgl, &self.linear_sampler),
                 PipelineKind::Depth => (&self.depth_bgl, &self.nearest_sampler),
             };
 

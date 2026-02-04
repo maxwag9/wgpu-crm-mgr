@@ -23,7 +23,7 @@ struct PipelineKey {
     shader_path: String,
     input_specs: Vec<(TextureFormat, u32, bool)>, // (format, sample_count, is_filterable)
     output_formats: Vec<TextureFormat>,
-    uniform_count: usize,
+    buffer_bindings: Vec<BufferBindingType>,
 }
 
 struct CachedPipeline {
@@ -125,10 +125,10 @@ impl ComputeSystem {
     ///   - `binding n`: shared sampler
     /// - `@group(1)`: output storage textures
     ///   - `binding 0..m`: output texture views
-    /// - `@group(2)`: uniform buffers
-    ///   - `binding 0..k`: uniform buffers
+    /// - `@group(2)`: uniform/storage(read_write) buffers
+    ///   - `binding 0..k`: uniform/storage(read_write) buffers
     ///
-    /// Empty input/output/uniform lists create empty bind groups for those slots.
+    /// Empty input/output/uniform/storage(read_write) lists create empty bind groups for those slots.
     ///
     /// ## Texture handling
     /// - MSAA input textures are auto-detected via `sample_count`
@@ -141,7 +141,7 @@ impl ComputeSystem {
     /// - `output_views`: Write-only storage texture views
     /// - `shader_path`: Path to the WGSL compute shader
     /// - `options`: Compute pipeline and dispatch configuration
-    /// - `uniforms`: Optional uniform buffers
+    /// - `buffers`: Optional uniform/storage(read_write) buffers
     ///
     /// ## Notes
     /// - Shader entry point must be `main`
@@ -151,7 +151,7 @@ impl ComputeSystem {
     /// - Entry point: `@compute @workgroup_size(...) fn main()`
     /// - Input textures must match the order given
     /// - Output textures must be `texture_storage_2d<... , write>`
-    /// - Uniforms must match binding indices exactly
+    /// - Uniforms/Storage(read_write) must match binding indices exactly
     pub fn compute(
         &mut self,
         encoder: Option<&mut CommandEncoder>,
@@ -160,7 +160,7 @@ impl ComputeSystem {
         output_views: Vec<&TextureView>,
         shader_path: &PathBuf,
         options: ComputePipelineOptions,
-        uniforms: &[&Buffer],
+        buffers: &[&Buffer],
     ) {
         let encoder_is_none = encoder.is_none();
         #[cfg(debug_assertions)]
@@ -194,17 +194,27 @@ impl ComputeSystem {
             .collect();
 
         let output_formats: Vec<_> = output_views.iter().map(|v| v.texture().format()).collect();
+        let buffer_bindings: Vec<_> = buffers
+            .iter()
+            .map(|b| buffer_binding_type(b))
+            .collect();
 
         let key = PipelineKey {
             shader_path: shader_path.to_str().unwrap_or("").to_string(),
             input_specs: input_specs.clone(),
             output_formats: output_formats.clone(),
-            uniform_count: uniforms.len(),
+            buffer_bindings: buffer_bindings.clone(),
         };
 
         // Get or create cached pipeline
         if !self.pipeline_cache.contains_key(&key) {
-            let cached = self.create_pipeline(shader_path, &input_specs, &output_formats, uniforms.len());
+            let cached = self.create_pipeline(
+                shader_path,
+                &input_specs,
+                &output_formats,
+                &buffer_bindings,
+            );
+
             self.pipeline_cache.insert(key.clone(), cached);
         }
         let cached = self.pipeline_cache.get(&key).unwrap();
@@ -217,7 +227,7 @@ impl ComputeSystem {
         // Create bind groups
         let input_bg = self.create_input_bind_group(&cached.bind_group_layouts[0], &input_views, use_filtering);
         let output_bg = self.create_output_bind_group(&cached.bind_group_layouts[1], &output_views);
-        let uniform_bg = self.create_uniform_bind_group(&cached.bind_group_layouts[2], uniforms);
+        let uniform_bg = self.create_uniform_bind_group(&cached.bind_group_layouts[2], buffers);
 
         // Resolve encoder (external or create new)
         let mut owned_encoder = None;
@@ -280,7 +290,7 @@ impl ComputeSystem {
         shader_path: &PathBuf,
         input_specs: &[(TextureFormat, u32, bool)], // (format, sample_count, is_filterable)
         output_formats: &[TextureFormat],
-        uniform_count: usize,
+        buffer_bindings: &[BufferBindingType],
     ) -> CachedPipeline {
         let shader_source = fs::read_to_string(shader_path)
             .unwrap_or_else(|_| panic!("Failed to read shader: {}", shader_path.display()));
@@ -367,13 +377,15 @@ impl ComputeSystem {
                 entries: &output_entries,
             });
 
-        // Group 2: uniforms
-        let uniform_entries: Vec<BindGroupLayoutEntry> = (0..uniform_count)
-            .map(|i| BindGroupLayoutEntry {
+        // Group 2: buffers
+        let buffer_entries: Vec<BindGroupLayoutEntry> = buffer_bindings
+            .iter()
+            .enumerate()
+            .map(|(i, ty)| BindGroupLayoutEntry {
                 binding: i as u32,
                 visibility: ShaderStages::COMPUTE,
                 ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
+                    ty: *ty,
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
@@ -381,14 +393,14 @@ impl ComputeSystem {
             })
             .collect();
 
-        let uniform_layout = self
-            .device
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("compute_uniform_layout"),
-                entries: &uniform_entries,
-            });
+        let buffer_layout = self.device.create_bind_group_layout(
+            &BindGroupLayoutDescriptor {
+                label: Some("compute_buffer_layout"),
+                entries: &buffer_entries,
+            },
+        );
 
-        let bind_group_layouts = [input_layout, output_layout, uniform_layout];
+        let bind_group_layouts = [input_layout, output_layout, buffer_layout];
 
         let pipeline_layout = self
             .device
@@ -531,5 +543,20 @@ pub(crate) fn figure_out_aspect(format: TextureFormat) -> Option<TextureAspect> 
         Some(TextureAspect::StencilOnly)
     } else {
         None
+    }
+}
+fn buffer_binding_type(buffer: &Buffer) -> BufferBindingType {
+    let usage = buffer.usage();
+
+    if usage.contains(BufferUsages::UNIFORM) {
+        BufferBindingType::Uniform
+    } else if usage.contains(BufferUsages::STORAGE) {
+        BufferBindingType::Storage { read_only: false }
+    } else {
+        panic!(
+            "Buffer {:?} has unsupported usage {:?} for compute binding",
+            buffer,
+            usage
+        );
     }
 }

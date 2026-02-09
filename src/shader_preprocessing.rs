@@ -8,6 +8,10 @@ use wgpu::{Device, ShaderModule, ShaderModuleDescriptor, ShaderSource};
 /// similar to `#ifdef` / `#include` in GLSL or C, while still producing **valid WGSL**
 /// before it reaches wgpu/Naga.
 ///
+/// # Updating Defines
+/// You MUST update the defines using [`update_define()`](crate::renderer::RenderManager::update_define()) in the [`RenderManager`](crate::renderer::RenderManager)!
+///
+///
 /// ### Supported directives
 ///
 /// The preprocessor understands the following directives:
@@ -35,7 +39,7 @@ use wgpu::{Device, ShaderModule, ShaderModuleDescriptor, ShaderSource};
 /// #endif
 /// ```
 ///
-/// Passing `"MSAA"` in `defines` will select the multisampled path.
+/// In this example, passing `"MSAA"` in `defines` will select the multisampled path.
 /// Otherwise, the non-MSAA path is emitted.
 ///
 /// This allows:

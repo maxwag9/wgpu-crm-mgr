@@ -1,15 +1,38 @@
 use std::collections::HashMap;
-use wgpu::{AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Device, FilterMode, MipmapFilterMode, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, TextureSampleType, TextureView, TextureViewDimension};
+use std::hash::{DefaultHasher, Hash, Hasher};
+use wgpu::{AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, Device, FilterMode, MipmapFilterMode, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, TextureAspect, TextureSampleType, TextureView, TextureViewDimension};
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct MaterialBindGroupKey {
-    view_ids: Vec<usize>,
+    views_hash: u64,
     has_shadow: bool
 }
 
 impl MaterialBindGroupKey {
     fn from_views(views: &[&TextureView], has_shadow: bool) -> Self {
-        Self { view_ids: views.iter().map(|v| *v as *const TextureView as usize).collect(), has_shadow }
+        let mut hasher = DefaultHasher::new();
+        for v in views {
+            v.hash(&mut hasher);
+        }
+        Self { views_hash: hasher.finish(), has_shadow }
+    }
+}
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub(crate) struct LayoutKey {
+    layout_hash: u64,
+    has_shadow: bool,
+}
+
+impl LayoutKey {
+    pub(crate) fn from_views(views: &[&TextureView], has_shadow: bool) -> Self {
+        let mut hasher = DefaultHasher::new();
+        for v in views {
+            v.hash(&mut hasher);
+        }
+        Self {
+            layout_hash: hasher.finish(),
+            has_shadow
+        }
     }
 }
 
@@ -17,7 +40,7 @@ impl MaterialBindGroupKey {
 pub(crate) struct MaterialBindGroups {
     device: Device,
     sampler: Sampler,
-    pub(crate) layouts: HashMap<(usize, bool), BindGroupLayout>,
+    pub(crate) layouts: HashMap<LayoutKey, BindGroupLayout>,
     bind_groups: HashMap<MaterialBindGroupKey, BindGroup>,
 }
 
@@ -48,7 +71,8 @@ impl MaterialBindGroups {
         texture_views: &[&TextureView],
         has_shadow: bool,
     ) -> &BindGroupLayout {
-        let key = (texture_views.len(), has_shadow);
+
+        let key = LayoutKey::from_views(texture_views, has_shadow);
 
         if !self.layouts.contains_key(&key) {
             let mut entries = Vec::new();
@@ -63,33 +87,47 @@ impl MaterialBindGroups {
             });
             binding += 1;
 
+            let device_features = self.device.features();
             // 1..N: textures (auto-detect)
             for view in texture_views {
                 let tex = view.texture();
-                let is_depth = tex.format().has_depth_aspect();
+                let format = tex.format();
+                let is_multisampled = tex.sample_count() > 1;
+
+                let sample_type = format
+                    .sample_type(Some(TextureAspect::All), Some(device_features))
+                    // Fallback for combined depth-stencil: default to depth
+                    .or_else(|| format.sample_type(Some(TextureAspect::DepthOnly), Some(device_features)))
+                    .expect("Unsupported texture format");
+
+                // Multisampled textures cannot use filtering
+                let sample_type = if is_multisampled {
+                    match sample_type {
+                        TextureSampleType::Float { .. } => TextureSampleType::Float { filterable: false },
+                        other => other,
+                    }
+                } else {
+                    // println!("{:?}, {:?}, {:?}", sample_type, is_multisampled, view.texture().format());
+                    sample_type
+                };
 
                 entries.push(BindGroupLayoutEntry {
                     binding,
                     visibility: ShaderStages::FRAGMENT,
                     ty: BindingType::Texture {
-                        multisampled: tex.sample_count() > 1,
+                        multisampled: is_multisampled,
                         view_dimension: if tex.depth_or_array_layers() > 1 {
                             TextureViewDimension::D2Array
                         } else {
                             TextureViewDimension::D2
                         },
-                        sample_type: if is_depth {
-                            TextureSampleType::Depth
-                        } else {
-                            TextureSampleType::Float { filterable: true }
-                        },
+                        sample_type,
                     },
                     count: None,
                 });
 
                 binding += 1;
             }
-
             // Shadow (optional)
             if has_shadow {
                 entries.push(BindGroupLayoutEntry {
@@ -117,12 +155,11 @@ impl MaterialBindGroups {
                 entries: &entries,
             });
 
-            self.layouts.insert(key, layout);
+            self.layouts.insert(key.clone(), layout);
         }
 
         self.layouts.get(&key).unwrap()
     }
-
 
     /// Returns a bind group for the given texture views, creating it if necessary.
     pub(crate) fn get_or_create(

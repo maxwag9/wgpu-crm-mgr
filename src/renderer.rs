@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use wgpu::{BindGroup, BindGroupLayout, Buffer, CommandEncoder, Device, Queue, RenderPass, TextureView};
-use crate::bind_groups::MaterialBindGroups;
+use crate::bind_groups::{LayoutKey, MaterialBindGroups};
 use crate::compute_system::{ComputePipelineOptions, ComputeSystem};
 use crate::fullscreen::{DebugVisualization, DepthDebugParams, FullscreenRenderer};
 use crate::generator::{TextureGenerator, TextureKey};
@@ -240,7 +240,7 @@ impl RenderManager {
         let material_layout_handle = self
             .materials
             .layouts
-            .get(&(texture_views.len(), has_shadow))
+            .get(&LayoutKey::from_views(texture_views, has_shadow))
             .expect("material layout must exist")
             .clone();
 

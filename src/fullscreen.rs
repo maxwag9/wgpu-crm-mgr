@@ -1057,15 +1057,3 @@ fn infer_texture_binding_type(view: &TextureView, device: &Device) -> BindingTyp
         multisampled,
     }
 }
-
-/// Infer an appropriate sampler binding type from the texture sample type.
-/// Note: depth textures are usually sampled with a comparison sampler and shader uses textureSampleCmp.
-fn infer_sampler_binding_type(sample_type: TextureSampleType) -> SamplerBindingType {
-    match sample_type {
-        TextureSampleType::Depth => SamplerBindingType::Comparison,
-        TextureSampleType::Float { filterable } => {
-            if filterable { SamplerBindingType::Filtering } else { SamplerBindingType::NonFiltering }
-        }
-        TextureSampleType::Uint | TextureSampleType::Sint => SamplerBindingType::NonFiltering,
-    }
-}
